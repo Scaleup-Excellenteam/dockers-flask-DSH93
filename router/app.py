@@ -1,62 +1,80 @@
 from flask import Flask, request, jsonify
 import os
 import requests
+import base64
 
 app = Flask(__name__)
+CODE_DIR = '/app/code'
 
-# Temporary directory to save code files
-TEMP_DIR = 'temp_code'
+os.makedirs(CODE_DIR, exist_ok=True)
 
-if not os.path.exists(TEMP_DIR):
-    os.makedirs(TEMP_DIR)
+@app.route('/submit', methods=['POST'])
+def submit_code() -> jsonify:
+    """
+    Handle the submission of code via a POST request to the /submit endpoint.
 
-@app.route('/upload', methods=['POST'])
-def upload_code():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part in the request'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected for uploading'}), 400
-    file_path = os.path.join(TEMP_DIR, file.filename)
-    file.save(file_path)
-    print(f'File saved to {file_path}')
-    return jsonify({'message': 'File successfully uploaded', 'file_path': file_path}), 200
+    This function retrieves the language and code from the request form data.
+    If the code is encoded in base64, it decodes it and converts it to UTF-8.
+    The code is then saved to a file in the specified CODE_DIR directory.
+    Finally, the function prints the file path and its content, and returns a JSON response.
 
-@app.route('/files', methods=['GET'])
-def list_files():
-    files = os.listdir(TEMP_DIR)
-    print(f'Files in {TEMP_DIR}: {files}')
-    return jsonify({'files': files})
-
-@app.route('/execute', methods=['GET'])
-def execute_code():
-    language = request.args.get('language')
-    filename = request.args.get('filename')
-    file_path = os.path.join(TEMP_DIR, filename)
+    Returns:
+        A JSON response indicating the status of the code submission.
+    """
     
+    language = request.form['language']
+    code = request.form['code']
+    encoding = request.form.get('encoding')
+
+    if encoding == 'base64':
+        code = base64.b64decode(code).decode('utf-8') # The code is decoded from base64 and converted to UTF-8
+        print(f"Decoded code: {code}")
+
+    file_path = os.path.join(CODE_DIR, f'code.{language}')
+
+    with open(file_path, 'w') as code_file:
+        code_file.write(code)
+
+    print(f"File created: {file_path}")
+    with open(file_path, 'r') as f:
+        print(f"File content: {f.read()}")
+
+    return jsonify({"status": "code submitted successfully"})
+
+@app.route('/execute/<language>', methods=['GET'])
+def execute_code(language: str)->jsonify:
+    """
+    Executes the given code for the specified language.
+
+    Args:
+        language (str): The programming language of the code.
+
+    Returns:
+        A JSON response containing the result of executing the code.
+
+    Raises:
+        404: If no code is found for the specified language.
+        400: If the specified language is not supported.
+    """
+
+    file_path = os.path.join(CODE_DIR, f'code.{language}')
     if not os.path.exists(file_path):
-        print(f'File {file_path} not found')
-        return jsonify({'error': 'File not found'}), 404
-    
-    # Forward the code to the appropriate language executor
-    response = forward_to_executor(language, file_path)
-    return jsonify(response)
+        return jsonify({"error": "No code found for this language"}), 404
 
-def forward_to_executor(language, file_path):
-    with open(file_path, 'r') as file:
-        code = file.read()
-
-    if language == 'python':
-        response = requests.post('http://python-executor-container:5001/execute', json={'code': code})
-        return response.json()
-    elif language == 'java':
-        response = requests.post('http://java-executor-container:5002/execute', json={'code': code})
-        return response.json()
+    if language == 'java':
+        url = 'http://java-executor:5002/execute'
+    elif language == 'python':
+        url = 'http://python-executor:5001/execute'
     elif language == 'dart':
-        response = requests.post('http://dart-executor-container:5003/execute', json={'code': code})
-        return response.json()
+        url = 'http://dart-executor:5003/execute'
     else:
-        return {'message': f'Code execution for {language} not implemented'}
+        return jsonify({"error": "Unsupported language"}), 400
+
+    with open(file_path, 'r') as code_file: # The code is read from the file
+        code = code_file.read()
+
+    response = requests.post(url, json={"code": code}) # The code is sent to the appropriate executor service
+    return jsonify(response.json())
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

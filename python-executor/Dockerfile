@@ -2,10 +2,13 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-COPY . /app
+COPY app.py requirements.txt ./
 
-RUN pip install flask
+RUN python3 -m venv venv \
+    && . venv/bin/activate \
+    && pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 5001
+ENV VIRTUAL_ENV=/app/venv
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 CMD ["python", "app.py"]

@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 
 @app.route('/execute', methods=['POST'])
-def execute_code():
+def execute_code(): # The execute_code function is responsible for executing the Java code
     code = request.get_json().get('code')
     if not code:
         return jsonify({'error': 'No code provided'}), 400

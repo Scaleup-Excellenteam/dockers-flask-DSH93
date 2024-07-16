@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  router:
+    build: ./router
+    ports:
+      - "5000:5000"
+    networks:
+      - execution-network
+
+  python-executor:
+    build: ./python-executor
+    ports:
+      - "5001:5001"
+    networks:
+      - execution-network
+
+  java-executor:
+    build: ./java-executor
+    ports:
+      - "5002:5002"
+    networks:
+      - execution-network
+
+  dart-executor:
+    build: ./dart-executor
+    ports:
+      - "5003:5003"
+    networks:
+      - execution-network
+
+networks:
+  execution-network:
